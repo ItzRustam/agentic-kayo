@@ -1,0 +1,11 @@
+
+langchain
+langchain-core
+langchain-openrouter
+langchain-google-genai
+streamlit
+vosk
+pyaudio
+python-dotenv
+requests
+gtts
