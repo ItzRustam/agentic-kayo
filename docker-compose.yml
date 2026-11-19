@@ -1,0 +1,47 @@
+services:
+  kayo:
+    build: .
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      KAYO_WORKSPACE: /workspace
+      PYTHON_RUNNER_URL: http://python-runner:8765
+    volumes:
+      - kayo_workspace:/workspace
+    depends_on:
+      - python-runner
+    networks:
+      - default
+      - runner_internal
+
+  python-runner:
+    build: .
+    command: ["/app/.venv/bin/python", "-m", "src.runner.server"]
+    environment:
+      RUNNER_WORKSPACE: /workspace
+      RUNNER_HOST: 0.0.0.0
+      RUNNER_PORT: "8765"
+    volumes:
+      - kayo_workspace:/workspace
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 64
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - runner_internal
+
+volumes:
+  kayo_workspace:
+
+networks:
+  runner_internal:
+    internal: true
