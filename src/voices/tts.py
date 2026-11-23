@@ -1,39 +1,54 @@
-"""Text-To-Speech conversion using gTTS and PyGame"""
-
-from gtts import gTTS
-import pygame
+import asyncio
 import tempfile
 import os
+
+import edge_tts
+import pygame
+
+
+VOICE = "en-US-GuyNeural"
+RATE = "+30%"
+PITCH = "-20Hz"
 
 pygame.mixer.init()
 
 
-def tts(text: str, slow: bool = False):
-    """Convert text to speech and play it."""
+async def generate_audio(text: str, output_path: str):
+    communicate = edge_tts.Communicate(
+        text=text,
+        voice=VOICE,
+        rate=RATE,
+        pitch=PITCH,
+    )
+    await communicate.save(output_path)
 
+
+def speak(text: str):
     if not text.strip():
         return
 
-    tts = gTTS(text=text, lang="en", slow=slow, tld="us")
-
-    # Temporary audio file
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-        audio_path = f.name
+    with tempfile.NamedTemporaryFile(
+        suffix=".mp3",
+        delete=False,
+    ) as file:
+        audio_path = file.name
 
     try:
-        tts.save(audio_path)
+        asyncio.run(generate_audio(text, audio_path))
 
         pygame.mixer.music.load(audio_path)
         pygame.mixer.music.play()
 
-        # Wait until playback finishes
+        clock = pygame.time.Clock()
         while pygame.mixer.music.get_busy():
-            pygame.time.Clock().tick(10)
+            clock.tick(20)
 
     finally:
         pygame.mixer.music.stop()
         pygame.mixer.music.unload()
-        os.remove(audio_path)
+
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
 
 
-tts("Hey, I'm Kayo and It's pretty cool!")
+speak("Hello. I am Kayo. How can I help you today?")
