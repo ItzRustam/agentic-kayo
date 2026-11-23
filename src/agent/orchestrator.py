@@ -1,213 +1,110 @@
-"""Bounded manual tool-calling agent orchestrator without LangGraph."""
+"""Combination of tools and LLM from factory, TL;DR Building Agent"""
 
-from __future__ import annotations
+from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.exceptions import ModelRateLimitError
 
-import json
-import logging
-from dataclasses import dataclass, field
-from typing import Any, Callable
-
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    ToolMessage,
+from src.llm import get_model
+from src.tools import (
+    web_search,
+    search_arxiv,
+    search_wikipedia,
+    open_website,
+    run_command,
+    calculate,
+    update_user_info,
+    TOOLS_BOARD
 )
-
-from src.config import AppConfig, get_config
-from src.tools.registry import ToolRegistry, default_registry
-
-logger = logging.getLogger(__name__)
+from src.agent.prompts import system_prompt
+from src.config_loader import get_configs
 
 
-@dataclass
-class AgentRunResult:
-    content: str
-    tool_calls: list[dict[str, Any]] = field(default_factory=list)
-    requires_confirmation: bool = False
-    pending_action: dict[str, Any] | None = None
-    messages: list[BaseMessage] = field(default_factory=list)
-    error: str | None = None
+MAX_TOOL_CALL = int(get_configs()["max_agent_steps"])
 
 
-class AgentOrchestrator:
+def create_kayo():
+    """Function to create Agent (Combined with Imported tools)"""
+    llm = get_model()
+
+    tools = [
+        web_search,
+        search_wikipedia,
+        search_arxiv,
+        open_website,
+        run_command,
+        calculate,
+        update_user_info
+    ]
+
+    agent = llm.bind_tools(tools=tools)
+
+    return agent
+
+
+def run_kayo(query: str | None = None) -> str:
+    """Run Kayo
+    Function to invoke Kayo for response on given `query`
     """
-    Manual, bounded tool-calling loop.
-    Controls the interaction between user messages, primary Gemini LLM,
-    and the tool execution layer.
-    """
 
-    def __init__(
-        self,
-        model: BaseChatModel,
-        registry: ToolRegistry | None = None,
-        config: AppConfig | None = None,
-    ) -> None:
-        self.config = config or get_config()
-        self.registry = registry or default_registry
-        self.raw_model = model
-        # Bind registry tools to the model
-        lc_tools = self.registry.get_langchain_tools()
-        self.bound_model = model.bind_tools(lc_tools) if lc_tools else model
+    if not query or not query.strip():
+        return "Query can't be None or Empty"
 
-    def run(
-        self,
-        messages: list[BaseMessage],
-        on_step_callback: Callable[[str], None] | None = None,
-    ) -> AgentRunResult:
-        """
-        Execute the bounded agent loop starting from the provided messages.
-        """
-        current_messages = list(messages)
-        max_steps = self.config.max_agent_steps
-        executed_tools_log: list[dict[str, Any]] = []
+    # Message History will only last for given query to save memory
+    message = []  # Always be reinitialized on each query as input
 
-        for step in range(max_steps):
-            logger.debug("Orchestrator loop iteration %d/%d", step + 1, max_steps)
+    message.append(system_prompt)
+    message.append(HumanMessage(content=query))
 
-            try:
-                ai_response = self.bound_model.invoke(current_messages)
-            except Exception as exc:
-                logger.exception("LLM provider invocation failed: %s", exc)
-                return AgentRunResult(
-                    content="I encountered an error communicating with the model provider. Please check your API key and connection.",
-                    tool_calls=executed_tools_log,
-                    messages=current_messages,
-                    error=str(exc),
+    kayo = create_kayo()
+
+    # ReAct Work
+    try:
+        result = kayo.invoke(message)
+        message.append(result)
+
+        tool_calls = 0
+
+        while result.tool_calls:
+
+            if tool_calls >= MAX_TOOL_CALL:
+                return (
+                    "Okay, I've done enough digging for now. "
+                    "I'm hitting my tool limit—let's try a smaller request."
                 )
 
-            # Check if model requested any tool calls
-            tool_calls = getattr(ai_response, "tool_calls", None) or []
+            # Multi-tool calling
+            for tool_info in result.tool_calls:
 
-            if not tool_calls:
-                # Model returned a final natural language response
-                current_messages.append(ai_response)
-                final_text = self._extract_content_text(ai_response.content)
-                return AgentRunResult(
-                    content=final_text,
-                    tool_calls=executed_tools_log,
-                    requires_confirmation=False,
-                    messages=current_messages,
-                )
-
-            # Append the assistant's tool-calling message
-            current_messages.append(ai_response)
-
-            # Process each requested tool call
-            for call in tool_calls:
-                call_id = call.get("id", f"call_{step}")
-                tool_name = call.get("name", "")
-                tool_args = call.get("args") or {}
-
-                if on_step_callback:
-                    on_step_callback(f"Executing tool: {tool_name}...")
-
-                # Dispatch tool
-                result = self.registry.dispatch(
-                    name=tool_name,
-                    arguments=tool_args,
-                    bypass_confirmation=False,
-                )
-
-                # Check if confirmation is required
-                if result.get("requires_confirmation"):
-                    logger.info("Tool '%s' requires confirmation. Halting loop for user approval.", tool_name)
-                    return AgentRunResult(
-                        content=result.get("message", f"Approval required for '{tool_name}'."),
-                        tool_calls=executed_tools_log,
-                        requires_confirmation=True,
-                        pending_action={
-                            "call_id": call_id,
-                            "tool": tool_name,
-                            "arguments": tool_args,
-                            "preview": result.get("preview"),
-                        },
-                        messages=current_messages,
+                if tool_calls >= MAX_TOOL_CALL:
+                    return (
+                        "Okay, I've done enough digging for now. "
+                        "I'm hitting my tool limit—let's try a smaller request."
                     )
 
-                executed_tools_log.append({
-                    "call_id": call_id,
-                    "tool": tool_name,
-                    "arguments": tool_args,
-                    "result": result,
-                })
+                chosen_tool = TOOLS_BOARD[tool_info["name"]]
 
-                # Append tool result message
-                tool_msg = ToolMessage(
-                    content=json.dumps(result, ensure_ascii=False),
-                    tool_call_id=call_id,
+                try:
+                    tool_result = chosen_tool.invoke(tool_info["args"])
+
+                except Exception as E:
+                    tool_result = f"Tool execution failed: {str(E)}"
+
+                tool_result = ToolMessage(
+                    content=str(tool_result),
+                    tool_call_id=tool_info["id"]
                 )
-                current_messages.append(tool_msg)
 
-        # Exceeded maximum tool steps
-        logger.warning("Agent reached maximum step limit of %d", max_steps)
-        notice = f"\n\n*[Notice: Agent stopped after reaching maximum allowed steps ({max_steps})]*"
-        return AgentRunResult(
-            content="I gathered some information but reached the maximum allowed tool execution steps." + notice,
-            tool_calls=executed_tools_log,
-            requires_confirmation=False,
-            messages=current_messages,
-            error="Maximum agent steps exceeded.",
-        )
+                message.append(tool_result)
 
-    def resume_action(
-        self,
-        messages: list[BaseMessage],
-        pending_action: dict[str, Any],
-        approved: bool,
-        on_step_callback: Callable[[str], None] | None = None,
-    ) -> AgentRunResult:
-        """
-        Resume the orchestrator loop after a user approves or rejects a pending tool action.
-        """
-        current_messages = list(messages)
-        call_id = pending_action["call_id"]
-        tool_name = pending_action["tool"]
-        tool_args = pending_action["arguments"]
+                tool_calls += 1
 
-        if not approved:
-            # User rejected the action
-            rejected_result = {
-                "ok": False,
-                "tool": tool_name,
-                "error": "Action was cancelled by the user in the interface.",
-            }
-            tool_msg = ToolMessage(
-                content=json.dumps(rejected_result),
-                tool_call_id=call_id,
-            )
-            current_messages.append(tool_msg)
-        else:
-            # User approved: execute with bypass_confirmation=True
-            if on_step_callback:
-                on_step_callback(f"Executing approved action: {tool_name}...")
+            # Let the model process all tool results
+            result = kayo.invoke(message)
+            message.append(result)
 
-            exec_result = self.registry.dispatch(
-                name=tool_name,
-                arguments=tool_args,
-                bypass_confirmation=True,
-            )
-            tool_msg = ToolMessage(
-                content=json.dumps(exec_result, ensure_ascii=False),
-                tool_call_id=call_id,
-            )
-            current_messages.append(tool_msg)
+        return result.content
 
-        # Resume loop from current state
-        return self.run(current_messages, on_step_callback=on_step_callback)
+    except ModelRateLimitError as RLE:
+        return f"Error: {str(RLE)} wait some time for reset this limit."
 
-    @staticmethod
-    def _extract_content_text(content: Any) -> str:
-        """Helper to extract clean string from LLM message content."""
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            parts = []
-            for item in content:
-                if isinstance(item, dict) and "text" in item:
-                    parts.append(item["text"])
-                elif isinstance(item, str):
-                    parts.append(item)
-            return "".join(parts)
-        return str(content)
+    except Exception as E:
+        return f"Error: '{str(E)}'"
