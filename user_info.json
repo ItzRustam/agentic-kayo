@@ -1,8 +1,4 @@
 {
-  "profile": {
-    "name": "",
-    "email": ""
-  },
-  "preferences": [],
-  "context": {}
+  "name": "",
+  "description": ""
 }

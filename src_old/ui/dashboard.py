@@ -7,15 +7,15 @@ from typing import Any
 
 import streamlit as st
 
-from src.agent.context import build_initial_messages
-from src.agent.orchestrator import AgentOrchestrator
-from src.config import get_config
-from src.llm.codegen import generate_code
-from src.llm.factory import get_primary_model
-from src.storage.user_info import load_user_info, update_profile_sender
-from src.tools.registry import default_registry, get_tool_activity_log
-from src.voice.microphone import process_browser_audio
-from src.voice.tts import text_to_speech_mp3
+from src_old.agent.context import build_initial_messages
+from src_old.agent.orchestrator import AgentOrchestrator
+from src_old.config import get_config
+from src_old.llm.codegen import generate_code
+from src_old.llm.factory import get_primary_model
+from src_old.storage.user_info import load_user_info, update_profile_sender
+from src_old.tools.registry import default_registry, get_tool_activity_log
+from src_old.voice.microphone import process_browser_audio
+from src_old.voice.tts import text_to_speech_mp3
 
 logger = logging.getLogger(__name__)
 

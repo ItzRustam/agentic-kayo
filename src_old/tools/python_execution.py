@@ -8,8 +8,8 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from src.config import get_config
-from src.runner.server import execute_python_cmd, _resolve_runner_path
+from src_old.config import get_config
+from src_old.runner.server import execute_python_cmd, _resolve_runner_path
 import sys
 
 logger = logging.getLogger(__name__)

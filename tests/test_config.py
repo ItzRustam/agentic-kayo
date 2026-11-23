@@ -1,64 +1,64 @@
-"""Tests for configuration loader."""
-
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../src")
+
 import unittest
-from unittest.mock import patch
-from src.config import get_config, AppConfig
+from unittest.mock import patch, mock_open
+from src.config_loader import get_configs, load_user_info
+import json
+from dotenv import load_dotenv
 
 
-class TestConfig(unittest.TestCase):
-    def test_default_config_values(self):
-        with patch.dict(os.environ, {}, clear=True):
-            cfg = get_config()
-            self.assertEqual(cfg.kayo_model, "gemini-3.5-flash-lite")
-            self.assertEqual(cfg.codegen_model, "baidu/ernie-5.5-flash-preview:free")
-            self.assertEqual(cfg.vosk_model_path, "models/en-small")
-            self.assertEqual(cfg.max_agent_steps, 8)
-            self.assertEqual(cfg.smtp_port, 587)
-            self.assertTrue(cfg.smtp_use_tls)
-            self.assertEqual(cfg.app_timezone, "Asia/Kolkata")
 
-    def test_validation_missing_keys(self):
-        cfg = AppConfig(
-            google_api_key="",
-            openrouter_api_key="",
-            kayo_model="gemini",
-            codegen_model="ernie",
-            vosk_model_path="models",
-            max_agent_steps=8,
-            mail_password="",
-            smtp_host="",
-            smtp_port=587,
-            smtp_use_tls=True,
-            app_timezone="UTC",
-            kayo_workspace="./workspace",
-            python_runner_url="http://localhost:8765",
-        )
-        with self.assertRaises(ValueError):
-            cfg.validate_google_credentials()
+class TestConfigLoader(unittest.TestCase):
 
-        with self.assertRaises(ValueError):
-            cfg.validate_openrouter_credentials()
+    @patch('config_loader.load_dotenv')
+    def test_get_configs_with_env_vars(self, mock_load_dotenv):
+        """Test that configs load correctly from environment variables"""
+        # Setup test environment variables
+        test_env = {
+            "OPENROUTER_API_KEY": "test_api_key",
+            "MODEL": "test_model",
+            "VOSK_MODEL_PATH": "test_model_path",
+            "MAX_AGENT_STEPS": "15",
+        }
 
-    def test_validation_warnings(self):
-        cfg = AppConfig(
-            google_api_key="valid",
-            openrouter_api_key="valid",
-            kayo_model="gemini",
-            codegen_model="ernie",
-            vosk_model_path="models",
-            max_agent_steps=-1,
-            mail_password="",
-            smtp_host="",
-            smtp_port=99999,
-            smtp_use_tls=True,
-            app_timezone="UTC",
-            kayo_workspace="./workspace",
-            python_runner_url="http://localhost:8765",
-        )
-        issues = cfg.validate()
-        self.assertEqual(len(issues), 2)
+        for key, value in test_env.items():
+            os.environ[key] = value
 
+        # Call function
+        result = get_configs()
 
-if __name__ == "__main__":
+        # Verify results
+        self.assertEqual(result["api_key"], "test_api_key")
+        self.assertEqual(result["model"], "test_model")
+        self.assertEqual(result["vosk_model"], "test_model_path")
+        self.assertEqual(result["max_agent_steps"], 15)  # Converted to bool
+
+    @patch('config_loader.load_dotenv')
+    def test_get_configs_with_defaults(self, mock_load_dotenv):
+        """Test that configs return defaults when environment variables are missing"""
+        # Clear environment variables
+        for key in os.environ:
+            if key.startswith("OPENROUTER_API_KEY"):
+                del os.environ[key]
+
+        # Call function
+        result = get_configs()
+
+        # Verify defaults
+        self.assertEqual(result["api_key"], "")
+        self.assertEqual(result["model"], "baidu/ernie-5.5-flash-preview:free")
+        self.assertEqual(result["vosk_model"], "models/en-small")
+        self.assertEqual(result["max_agent_steps"], 12)
+
+    def test_configs_returns_copy(self):
+        """Test that configs returns a copy to prevent modification"""
+        original = get_configs()
+        original["api_key"] = "modified"
+
+        # Verify original wasn't modified
+        self.assertEqual(get_configs()["api_key"], "")
+
+if __name__ == '__main__':
     unittest.main()

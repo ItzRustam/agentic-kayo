@@ -4,9 +4,9 @@ import unittest
 from unittest.mock import MagicMock
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src.agent.orchestrator import AgentOrchestrator
-from src.config import AppConfig
-from src.tools.registry import ToolRegistry
+from src_old.agent.orchestrator import AgentOrchestrator
+from src_old.config import AppConfig
+from src_old.tools.registry import ToolRegistry
 
 
 class TestAgentOrchestrator(unittest.TestCase):

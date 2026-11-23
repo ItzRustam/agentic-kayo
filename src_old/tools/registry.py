@@ -11,7 +11,7 @@ from typing import Any, Callable
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 
-from src.tools.files import (
+from src_old.tools.files import (
     create_file,
     delete_file,
     edit_file,
@@ -19,12 +19,12 @@ from src.tools.files import (
     read_file,
     search_files,
 )
-from src.tools.open_website import open_website
-from src.tools.python_execution import run_python_code, run_python_file
-from src.tools.search_wikipedia import search_wikipedia
-from src.tools.send_mail import prepare_mail_preview, send_mail
-from src.tools.utilities import calculate, get_current_datetime
-from src.tools.web_search import web_search
+from src_old.tools.open_website import open_website
+from src_old.tools.python_execution import run_python_code, run_python_file
+from src_old.tools.search_wikipedia import search_wikipedia
+from src_old.tools.send_mail import prepare_mail_preview, send_mail
+from src_old.tools.utilities import calculate, get_current_datetime
+from src_old.tools.web_search import web_search
 
 logger = logging.getLogger(__name__)
 

@@ -5,9 +5,9 @@ import unittest
 import wave
 from unittest.mock import MagicMock, patch
 
-from src.voice.microphone import process_browser_audio
-from src.voice.stt import transcribe_wav_bytes
-from src.voice.tts import text_to_speech_mp3
+from src_old.voice.microphone import process_browser_audio
+from src_old.voice.stt import transcribe_wav_bytes
+from src_old.voice.tts import text_to_speech_mp3
 
 
 class TestVoicePipeline(unittest.TestCase):

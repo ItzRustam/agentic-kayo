@@ -8,8 +8,8 @@ import smtplib
 from email.message import EmailMessage
 from typing import Any
 
-from src.config import get_config
-from src.storage.user_info import load_user_info
+from src_old.config import get_config
+from src_old.storage.user_info import load_user_info
 
 logger = logging.getLogger(__name__)
 

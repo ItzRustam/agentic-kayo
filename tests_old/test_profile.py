@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from src.storage.user_info import (
+from src_old.storage.user_info import (
     load_user_info,
     save_user_info,
     update_profile_sender,

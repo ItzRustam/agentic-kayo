@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 from vosk import KaldiRecognizer, Model
 
-from src.config import get_config
+from src_old.config import get_config
 
 logger = logging.getLogger(__name__)
 

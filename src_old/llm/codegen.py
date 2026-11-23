@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.config import AppConfig
-from src.llm.factory import get_codegen_model
+from src_old.config import AppConfig
+from src_old.llm.factory import get_codegen_model
 
 logger = logging.getLogger(__name__)
 

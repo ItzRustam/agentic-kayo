@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from src.config import get_config
+from src_old.config import get_config
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any
 import zoneinfo
 
-from src.config import get_config
+from src_old.config import get_config
 
 logger = logging.getLogger(__name__)
 

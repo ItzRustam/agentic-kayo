@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.tools.files import (
+from src_old.tools.files import (
     create_file,
     delete_file,
     edit_file,
@@ -13,11 +13,11 @@ from src.tools.files import (
     read_file,
     search_files,
 )
-from src.tools.open_website import open_website
-from src.tools.python_execution import run_python_code, run_python_file
-from src.tools.registry import ToolRegistry, default_registry
-from src.tools.send_mail import prepare_mail_preview
-from src.tools.utilities import calculate, get_current_datetime
+from src_old.tools.open_website import open_website
+from src_old.tools.python_execution import run_python_code, run_python_file
+from src_old.tools.registry import ToolRegistry, default_registry
+from src_old.tools.send_mail import prepare_mail_preview
+from src_old.tools.utilities import calculate, get_current_datetime
 
 
 class TestUtilities(unittest.TestCase):

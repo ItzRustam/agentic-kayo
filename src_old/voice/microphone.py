@@ -6,7 +6,7 @@ import io
 import logging
 from typing import Any
 
-from src.voice.stt import transcribe_wav_bytes
+from src_old.voice.stt import transcribe_wav_bytes
 
 logger = logging.getLogger(__name__)
 
