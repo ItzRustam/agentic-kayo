@@ -6,9 +6,11 @@ services:
     env_file:
       - .env
     environment:
+      VOSK_MODEL_PATH: /app/models/en-small
       KAYO_WORKSPACE: /workspace
       PYTHON_RUNNER_URL: http://python-runner:8765
     volumes:
+      - ./models:/app/models:ro
       - kayo_workspace:/workspace
     depends_on:
       - python-runner
