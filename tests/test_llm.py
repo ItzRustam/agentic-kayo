@@ -13,5 +13,4 @@ class TestLLM(unittest.TestCase):
 
         model = get_model()
 
-        self.assertEqual(model, ChatOpenRouter)
-    
+        self.assertIsInstance(model, ChatOpenRouter)
