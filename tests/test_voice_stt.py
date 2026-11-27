@@ -1,70 +1,103 @@
-"""Unit tests for offline Vosk Speech-to-Text module."""
+"""Unit tests for Groq Whisper Large v3 Turbo Speech-to-Text module."""
 
 import io
 import os
 import sys
 import unittest
-import wave
-import numpy as np
+from unittest.mock import MagicMock, patch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/../src")
 
 from src.voices.stt import (
-    convert_audio_to_pcm,
-    get_vosk_model,
+    GROQ_WHISPER_MODEL,
+    get_groq_client,
     transcribe_audio,
 )
 
 
-class TestVoskSTT(unittest.TestCase):
-    def test_convert_audio_empty(self):
-        self.assertEqual(convert_audio_to_pcm(b""), b"")
+class TestGroqSTT(unittest.TestCase):
+    def test_model_constant_is_whisper_large_v3_turbo(self):
+        """Verify the exact Groq model required is whisper-large-v3-turbo."""
+        self.assertEqual(GROQ_WHISPER_MODEL, "whisper-large-v3-turbo")
 
-    def test_convert_audio_valid_wav(self):
-        # Create 16kHz mono 16-bit WAV
-        rate = 16000
-        samples = np.zeros(1600, dtype=np.int16)
-        buf = io.BytesIO()
-        with wave.open(buf, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(rate)
-            wf.writeframes(samples.tobytes())
-        wav_bytes = buf.getvalue()
+    def test_vosk_not_imported_in_stt(self):
+        """Verify that Vosk is not imported in the active STT module."""
+        import src.voices.stt as stt_module
+        self.assertNotIn("vosk", sys.modules.get("src.voices.stt", {}).__dict__)
+        self.assertFalse(hasattr(stt_module, "KaldiRecognizer"))
+        self.assertFalse(hasattr(stt_module, "Model"))
 
-        pcm = convert_audio_to_pcm(wav_bytes)
-        self.assertEqual(len(pcm), len(samples.tobytes()))
+    def test_get_groq_client_missing_key(self):
+        """get_groq_client returns None when no API key is configured."""
+        with patch.dict(os.environ, {"GROQ_API_KEY": ""}, clear=False):
+            client = get_groq_client(api_key="")
+            self.assertIsNone(client)
 
-    def test_convert_audio_stereo_and_resampling(self):
-        # Create 44.1kHz stereo 16-bit WAV
-        rate = 44100
-        samples = np.zeros((4410, 2), dtype=np.int16)
-        buf = io.BytesIO()
-        with wave.open(buf, "wb") as wf:
-            wf.setnchannels(2)
-            wf.setsampwidth(2)
-            wf.setframerate(rate)
-            wf.writeframes(samples.tobytes())
-        wav_bytes = buf.getvalue()
+    def test_get_groq_client_with_key(self):
+        """get_groq_client initializes client when key is provided."""
+        client = get_groq_client(api_key="gsk_test_fake_api_key_12345")
+        self.assertIsNotNone(client)
 
-        pcm = convert_audio_to_pcm(wav_bytes)
-        # Should be resampled to 16kHz (around 1600 samples * 2 bytes = 3200 bytes)
-        self.assertTrue(len(pcm) > 0)
-        self.assertEqual(len(pcm) % 2, 0)
-
-    def test_get_vosk_model_invalid_path(self):
-        model = get_vosk_model("/nonexistent/path/to/vosk")
-        self.assertIsNone(model)
-
-    def test_transcribe_audio_empty_or_none(self):
+    def test_transcribe_audio_empty_inputs(self):
+        """transcribe_audio returns empty string for None or empty/short bytes."""
         self.assertEqual(transcribe_audio(None), "")
         self.assertEqual(transcribe_audio(b""), "")
+        self.assertEqual(transcribe_audio(b"too_short"), "")
 
-    def test_get_vosk_model_valid(self):
-        # Check if local model exists
-        if os.path.exists("models/en-small"):
-            model = get_vosk_model("models/en-small")
-            self.assertIsNotNone(model)
+    @patch("src.voices.stt.get_groq_client")
+    def test_transcribe_audio_success_string_response(self, mock_get_client):
+        """Verify transcription call with expected parameters and string return."""
+        mock_client = MagicMock()
+        mock_client.audio.transcriptions.create.return_value = "  Hello, this is a test.  "
+        mock_get_client.return_value = mock_client
+
+        # Sample audio bytes > 100 bytes
+        fake_audio = b"RIFF" + b"\x00" * 200
+
+        result = transcribe_audio(fake_audio, api_key="gsk_test")
+        self.assertEqual(result, "Hello, this is a test.")
+
+        mock_client.audio.transcriptions.create.assert_called_once_with(
+            file=("recording.wav", fake_audio),
+            model="whisper-large-v3-turbo",
+            language="en",
+            response_format="text",
+            temperature=0.0,
+            timeout=30.0,
+        )
+
+    @patch("src.voices.stt.get_groq_client")
+    def test_transcribe_audio_file_like_object(self, mock_get_client):
+        """Verify transcription with BytesIO object."""
+        mock_client = MagicMock()
+        mock_client.audio.transcriptions.create.return_value = "Transcription from BytesIO"
+        mock_get_client.return_value = mock_client
+
+        fake_audio = b"RIFF" + b"\x00" * 200
+        buf = io.BytesIO(fake_audio)
+        buf.name = "microphone_input.wav"
+
+        result = transcribe_audio(buf, api_key="gsk_test")
+        self.assertEqual(result, "Transcription from BytesIO")
+        mock_client.audio.transcriptions.create.assert_called_once_with(
+            file=("microphone_input.wav", fake_audio),
+            model="whisper-large-v3-turbo",
+            language="en",
+            response_format="text",
+            temperature=0.0,
+            timeout=30.0,
+        )
+
+    @patch("src.voices.stt.get_groq_client")
+    def test_transcribe_audio_error_handling(self, mock_get_client):
+        """Verify that API errors or timeouts do not crash the application."""
+        mock_client = MagicMock()
+        mock_client.audio.transcriptions.create.side_effect = Exception("Groq rate limit or connection timeout")
+        mock_get_client.return_value = mock_client
+
+        fake_audio = b"RIFF" + b"\x00" * 200
+        result = transcribe_audio(fake_audio, api_key="gsk_test")
+        self.assertEqual(result, "")
 
 
 if __name__ == "__main__":
