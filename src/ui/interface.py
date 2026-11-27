@@ -10,7 +10,7 @@ import streamlit as st
 
 from src.agent.orchestrator import run_kayo
 from src.config_loader import get_configs, load_user_info
-from src.voices.stt import transcribe_audio
+from src.voices.stt import GROQ_WHISPER_MODEL, transcribe_audio
 from src.voices.tts import text_to_speech
 
 logger = logging.getLogger(__name__)
@@ -59,8 +59,11 @@ def render_sidebar(configs: dict[str, Any], user_info: dict[str, Any]) -> None:
         st.subheader("System Status")
         st.caption(f"**User:** {user_info.get('name', 'User')}")
         st.caption(f"**LLM Model:** `{configs.get('model', 'Unknown')}`")
-        st.caption(f"**Vosk Model:** `{configs.get('vosk_model', 'models/en-small')}`")
+        st.caption(f"**STT Model:** `{GROQ_WHISPER_MODEL}` (Groq)")
         st.caption(f"**Tool Steps Limit:** `{configs.get('max_agent_steps', 12)}`")
+
+        if not configs.get("groq_api_key"):
+            st.warning("⚠️ `GROQ_API_KEY` is not set. Add it to `.env` or Streamlit Secrets for voice transcription.")
 
         st.divider()
 
@@ -145,7 +148,7 @@ def render_app() -> None:
                         else:
                             st.warning("Voice synthesis currently unavailable.")
 
-    # 2. Browser Microphone Input (Offline Vosk STT)
+    # 2. Browser Microphone Input (Groq Whisper STT)
     st.write("---")
     recorded_audio = st.audio_input("🎙️ Record Voice Message", key="browser_mic_input")
 
@@ -157,17 +160,20 @@ def render_app() -> None:
         if st.session_state.last_processed_audio_hash != audio_hash:
             st.session_state.last_processed_audio_hash = audio_hash
 
-            with st.spinner("Transcribing speech locally with Vosk..."):
-                transcript = transcribe_audio(raw_bytes, model_path=configs.get("vosk_model"))
-
-            if transcript:
-                if st.session_state.review_voice:
-                    st.session_state.pending_transcript = transcript
-                else:
-                    handle_user_submission(transcript)
-                    st.rerun()
+            if not configs.get("groq_api_key"):
+                st.error("GROQ_API_KEY is missing. Please set it in `.env` or Streamlit Secrets to transcribe voice.")
             else:
-                st.warning("No speech detected or recognized in the recording. Please try again.")
+                with st.spinner("Transcribing speech with Groq Whisper..."):
+                    transcript = transcribe_audio(raw_bytes)
+
+                if transcript:
+                    if st.session_state.review_voice:
+                        st.session_state.pending_transcript = transcript
+                    else:
+                        handle_user_submission(transcript)
+                        st.rerun()
+                else:
+                    st.warning("No speech detected or recognized in the recording. Please try again.")
 
     # 3. Review Box for Voice Transcription (if review mode is active)
     if st.session_state.pending_transcript:
