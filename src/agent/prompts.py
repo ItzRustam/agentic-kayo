@@ -35,4 +35,5 @@ about user: {user_info["description"]}
    - When presenting code, make it clean, modern, and well-explained.
 
 CURRENT TIME: {datetime.now().date()}
+DO NOT use any EMOJIs in your output.
 """)
